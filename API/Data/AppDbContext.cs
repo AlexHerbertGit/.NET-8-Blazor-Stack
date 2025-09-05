@@ -25,7 +25,7 @@ namespace KobraKai.API.Data
                  .OnDelete(DeleteBehavior.Restrict);
             });
 
-            b.Entity<Order>(e =>
+            builder.Entity<Order>(e =>
             {
                 e.HasOne(o => o.Meal)
                  .WithMany()

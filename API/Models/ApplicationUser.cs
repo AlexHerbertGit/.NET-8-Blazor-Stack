@@ -6,6 +6,6 @@ namespace KobraKai.API.Models
     {
         // Simple role column for prototype purposes
         public string Role { get; set; } = "beneficiary"; // "beneficiary" || "member".
-        public string TokenBalance { get; set; } = 10; // Default for all starting beneficiary accounts.
+        public int TokenBalance { get; set; } = 10; // Default for all starting beneficiary accounts.
     }
 }
