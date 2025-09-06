@@ -1,0 +1,22 @@
+﻿@page "/dashboard"
+@inject ApiClient Api
+
+<h3>Dashboard (/auth/me)</h3>
+
+@if (Me is null)
+{
+    <p>Not logged in.</p>
+}
+else
+{
+    <pre>@System.Text.Json.JsonSerializer.Serialize(Me, new System.Text.Json.JsonSerializerOptions { WriteIndented = true })</pre>
+}
+
+@code {
+    MeDto? Me;
+
+    class MeDto { public string? id { get; set; } public string? email { get; set; } public string? role { get; set; } public int tokenBalance { get; set; } public string? name { get; set; } }
+
+    protected override async Task OnInitializedAsync()
+        => Me = await Api.GetAsync<MeDto>("/auth/me");
+}

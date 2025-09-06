@@ -1,0 +1,26 @@
+﻿@page "/register"
+@inject ApiClient Api
+
+<h3>Register</h3>
+<input @bind="Name" placeholder="Name" />
+<input @bind="Email" placeholder="Email" />
+<input @bind="Password" type="password" placeholder="Password" />
+<select @bind="Role">
+    <option value="beneficiary">beneficiary</option>
+    <option value="member">member</option>
+</select>
+<button @onclick="RegisterAsync">Create Account</button>
+
+<pre>@Result</pre>
+
+@code {
+    string Name = "", Email = "", Password = "", Role = "beneficiary";
+    string? Result;
+
+    class RegisterReq { public string Name { get; set; } = ""; public string Email { get; set; } = ""; public string Password { get; set; } = ""; public string Role { get; set; } = "beneficiary"; public string? Address { get; set; } }
+    async Task RegisterAsync()
+    {
+        var r = await Api.Authed.PostAsJsonAsync("/auth/register", new RegisterReq { Name = Name, Email = Email, Password = Password, Role = Role });
+        Result = $"{(int)r.StatusCode} {r.ReasonPhrase}";
+    }
+}
