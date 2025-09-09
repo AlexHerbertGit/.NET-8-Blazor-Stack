@@ -1,9 +1,16 @@
 ﻿@page "/dashboard"
-@inject ApiClient Api
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inject Web.Services.ApiClient Api
+@inject NavigationManager Nav
 
 <h3>Dashboard (/auth/me)</h3>
 
-@if (Me is null)
+@if (loading)
+{
+    <p>Loading…</p>
+}
+else if (Me is null)
 {
     <p>Not logged in.</p>
 }
@@ -14,9 +21,24 @@ else
 
 @code {
     MeDto? Me;
+    bool loading = true;
 
     class MeDto { public string? id { get; set; } public string? email { get; set; } public string? role { get; set; } public int tokenBalance { get; set; } public string? name { get; set; } }
 
     protected override async Task OnInitializedAsync()
-        => Me = await Api.GetAsync<MeDto>("/auth/me");
+    {
+        try
+        {
+            Me = await Api.GetAsync<MeDto>("api/auth/me");
+        }
+        catch
+        {
+            // if your ApiClient throws on 401/JSON errors, you can redirect here
+            Nav.NavigateTo("api/login");
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
 }

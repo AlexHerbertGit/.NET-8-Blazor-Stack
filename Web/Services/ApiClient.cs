@@ -1,5 +1,6 @@
 ﻿using System.Net.Http.Json;
 
+namespace Web.Services;
 public class ApiClient
 {
     private readonly IHttpClientFactory _factory;

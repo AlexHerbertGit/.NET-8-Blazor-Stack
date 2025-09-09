@@ -1,17 +1,20 @@
 ﻿@page "/"
-@inject ApiClient Api
+@using Microsoft.AspNetCore.Components.Authorization
+@inject Web.Services.ApiClient Api
 
 <h3>Meals</h3>
 
-<div>
-    <h4>Create (member)</h4>
-    <input @bind="Title" placeholder="Title" />
-    <input @bind="Description" placeholder="Description" />
-    <input @bind="Tags" placeholder="dietary tags (comma separated)" />
-    <input type="number" @bind="Portions" />
-    <button @onclick="CreateMeal">Create</button>
-    <pre>@CreateResult</pre>
-</div>
+<AuthorizeView Roles="member">
+    <div>
+        <h4>Create (member)</h4>
+        <input @bind="Title" placeholder="Title" />
+        <input @bind="Description" placeholder="Description" />
+        <input @bind="Tags" placeholder="dietary tags (comma separated)" />
+        <input type="number" @bind="Portions" />
+        <button @onclick="CreateMeal">Create</button>
+        <pre>@CreateResult</pre>
+    </div>
+</AuthorizeView>
 
 <h4>All Meals</h4>
 @if (Meal is null)
@@ -38,7 +41,7 @@ else
     class MealCreate { public string title { get; set; } = ""; public string? description { get; set; } public string[]? dietaryTags { get; set; } public int portionsAvailable { get; set; } }
 
     protected override async Task OnInitializedAsync()
-        => Meal = await Api.Public.GetFromJsonAsync<MealDto[]>("/meals");
+        => Meal = await Api.Public.GetFromJsonAsync<MealDto[]>("api/meals");
 
     async Task CreateMeal()
     {
@@ -46,11 +49,13 @@ else
         {
             title = Title,
             description = Description,
-            dietaryTags = string.IsNullOrWhiteSpace(Tags) ? Array.Empty<string>() : Tags.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToArray(),
+            dietaryTags = string.IsNullOrWhiteSpace(Tags)
+                ? Array.Empty<string>()
+                : Tags.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToArray(),
             portionsAvailable = Portions
         };
-        var res = await Api.Authed.PostAsJsonAsync("/meals", body);
+        var res = await Api.Authed.PostAsJsonAsync("api/meals", body);
         CreateResult = $"{(int)res.StatusCode} {res.ReasonPhrase}";
-        Meal = await Api.Public.GetFromJsonAsync<MealDto[]>("/meals");
+        Meal = await Api.Public.GetFromJsonAsync<MealDto[]>("api/meals");
     }
 }

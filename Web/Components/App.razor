@@ -1,20 +1,34 @@
-﻿<!DOCTYPE html>
-<html lang="en">
+﻿@namespace Web.Components
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.AspNetCore.Components.Web
+@rendermode InteractiveServer
 
+<!DOCTYPE html>
+<html lang="en">
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
-    <link rel="stylesheet" href="bootstrap/bootstrap.min.css" />
-    <link rel="stylesheet" href="app.css" />
-    <link rel="stylesheet" href="Web.styles.css" />
-    <link rel="icon" type="image/png" href="favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- Optional: use the HeadOutlet if you want child pages to push <title> etc. -->
     <HeadOutlet />
 </head>
-
 <body>
-    <Routes />
+    <CascadingAuthenticationState>
+        <Router AppAssembly="@typeof(App).Assembly">
+            <Found Context="routeData">
+                <RouteView RouteData="routeData" DefaultLayout="typeof(Web.Components.MainLayout)" />
+                <FocusOnNavigate RouteData="routeData" Selector="h1" />
+            </Found>
+            <NotFound>
+                <h1>Not found</h1>
+                <p>Sorry, there’s nothing at this address.</p>
+            </NotFound>
+        </Router>
+    </CascadingAuthenticationState>
+
+    <!-- CRITICAL: Boot Blazor -->
     <script src="_framework/blazor.web.js"></script>
 </body>
-
 </html>

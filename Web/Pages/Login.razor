@@ -1,11 +1,11 @@
 ﻿@page "/login"
-@inject ApiClient Api
-@inject JwtAuthStateProvider AuthState
+@inject Web.Services.ApiClient Api
+@inject Web.Auth.JwtAuthStateProvider AuthState
 
 <h3>Login</h3>
 <input @bind="Email" placeholder="Email" />
 <input @bind="Password" type="password" placeholder="Password" />
-<button @onclick="Login">Login</button>
+<button @onclick="LoginUser">Login</button>
 
 <pre>@Result</pre>
 
@@ -19,7 +19,7 @@
 
     async Task LoginUser()
     {
-        var res = await Api.Authed.PostAsJsonAsync("/auth/login", new LoginReq { Email = Email, Password = Password });
+        var res = await Api.Public.PostAsJsonAsync("api/auth/login", new LoginReq { Email = Email, Password = Password });
         if (!res.IsSuccessStatusCode)
         {
             Result = await res.Content.ReadAsStringAsync();

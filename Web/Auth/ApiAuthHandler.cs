@@ -1,5 +1,6 @@
 ﻿using System.Net.Http.Headers;
 
+namespace Web.Auth;
 public class ApiAuthHandler : DelegatingHandler
 {
     private readonly TokenStore _store;
@@ -7,7 +8,7 @@ public class ApiAuthHandler : DelegatingHandler
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
-        var token = await _store.GetAsync();
+        var token = await _store.TryGetAsync();
         if (!string.IsNullOrWhiteSpace(token))
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return await base.SendAsync(request, ct);

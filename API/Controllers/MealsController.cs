@@ -13,45 +13,96 @@ namespace KobraKai.Api.Controllers;
 public class MealsController : ControllerBase
 {
     private readonly AppDbContext _db;
-    public MealsController(AppDbContext db) { _db = db; }
 
-    // Public list
+    public MealsController(AppDbContext db) => _db = db;
+
+    // GET: api/meals
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<MealDto>>> List()
+    public async Task<ActionResult<IEnumerable<MealDto>>> GetAll()
     {
-        var items = await _db.Meals.AsNoTracking().ToListAsync();
-        return items.Select(m => new MealDto(
-            m.Id, m.Title, m.Description,
-            (m.DietaryTagsCsv ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries),
-            m.PortionsAvailable,
-            m.ProviderId
-        )).ToList();
+        var meals = await _db.Meals.AsNoTracking().ToListAsync();
+        return Ok(meals.Select(ToDto));
     }
 
-    // Member create
-    [Authorize]
-    [HttpPost]
-    public async Task<ActionResult<MealDto>> Create([FromBody] MealCreateDto dto)
+    // GET: api/meals/{id}
+    [HttpGet("{id:guid}")]
+    public async Task<ActionResult<MealDto>> GetById(Guid id)
     {
-        // Quick role check from claim; you can also use [Authorize(Roles="member")] if using Identity roles
-        var role = User.FindFirstValue(ClaimTypes.Role) ?? "";
-        if (role != "member") return Forbid();
+        var meal = await _db.Meals.AsNoTracking().FirstOrDefaultAsync(m => m.Id == id);
+        if (meal is null) return NotFound();
+        return Ok(ToDto(meal));
+    }
 
-        var providerId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-        var meal = new Meal
+    // POST: api/meals  (members only)
+    [HttpPost]
+    [Authorize(Roles = "member")]
+    public async Task<ActionResult<MealDto>> Create(MealCreateDto input)
+    {
+        var entity = new Meal
         {
-            Title = dto.Title,
-            Description = dto.Description,
-            DietaryTagsCsv = dto.DietaryTags is { Length: > 0 } ? string.Join(',', dto.DietaryTags) : "",
-            PortionsAvailable = dto.PortionsAvailable,
-            ProviderId = providerId
+            Id = Guid.NewGuid(),
+            Title = input.Title,
+            Description = input.Description,
+            DietaryTagsCsv = JoinCsv(input.DietaryTags),
+            PortionsAvailable = input.PortionsAvailable,
+            // Optionally set ProviderId from the logged-in user:
+            // ProviderId = User.FindFirstValue(ClaimTypes.NameIdentifier)
         };
-        _db.Meals.Add(meal);
+
+        _db.Meals.Add(entity);
         await _db.SaveChangesAsync();
 
-        return CreatedAtAction(nameof(List), new { id = meal.Id },
-            new MealDto(meal.Id, meal.Title, meal.Description,
-            (meal.DietaryTagsCsv ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries),
-            meal.PortionsAvailable, meal.ProviderId));
+        var dto = ToDto(entity);
+        return CreatedAtAction(nameof(GetById), new { id = entity.Id }, dto);
     }
+
+    // PUT: api/meals/{id}  (members only)
+    [HttpPut("{id:guid}")]
+    [Authorize(Roles = "member")]
+    public async Task<IActionResult> Update(Guid id, MealUpdateDto input)
+    {
+        var meal = await _db.Meals.FindAsync(id);
+        if (meal is null) return NotFound();
+
+        meal.Title = input.Title;
+        meal.Description = input.Description;
+        meal.DietaryTagsCsv = JoinCsv(input.DietaryTags);
+        meal.PortionsAvailable = input.PortionsAvailable;
+
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    // DELETE: api/meals/{id}  (members only)
+    [HttpDelete("{id:guid}")]
+    [Authorize(Roles = "member")]
+    public async Task<IActionResult> Delete(Guid id)
+    {
+        var meal = await _db.Meals.FindAsync(id);
+        if (meal is null) return NotFound();
+
+        _db.Meals.Remove(meal);
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    // ----------------- helpers -----------------
+
+    private static MealDto ToDto(Meal m) => new()
+    {
+        Id = m.Id,
+        Title = m.Title,
+        Description = m.Description,
+        DietaryTags = SplitCsv(m.DietaryTagsCsv),
+        PortionsAvailable = m.PortionsAvailable,
+        ProviderId = m.ProviderId
+    };
+
+    private static string[] SplitCsv(string? csv) =>
+        string.IsNullOrWhiteSpace(csv)
+            ? Array.Empty<string>()
+            : csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    private static string JoinCsv(IEnumerable<string>? tags) =>
+        tags is null ? "" : string.Join(",", tags);
 }

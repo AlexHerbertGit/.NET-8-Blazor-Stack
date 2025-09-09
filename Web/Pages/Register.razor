@@ -1,5 +1,5 @@
 ﻿@page "/register"
-@inject ApiClient Api
+@inject Web.Services.ApiClient Api
 
 <h3>Register</h3>
 <input @bind="Name" placeholder="Name" />
@@ -20,7 +20,7 @@
     class RegisterReq { public string Name { get; set; } = ""; public string Email { get; set; } = ""; public string Password { get; set; } = ""; public string Role { get; set; } = "beneficiary"; public string? Address { get; set; } }
     async Task RegisterAsync()
     {
-        var r = await Api.Authed.PostAsJsonAsync("/auth/register", new RegisterReq { Name = Name, Email = Email, Password = Password, Role = Role });
+        var r = await Api.Public.PostAsJsonAsync("api/auth/register", new RegisterReq { Name = Name, Email = Email, Password = Password, Role = Role });
         Result = $"{(int)r.StatusCode} {r.ReasonPhrase}";
     }
 }
