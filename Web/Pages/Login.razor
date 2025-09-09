@@ -1,6 +1,7 @@
 ﻿@page "/login"
 @inject Web.Services.ApiClient Api
 @inject Web.Auth.JwtAuthStateProvider AuthState
+@inject NavigationManager Nav
 
 <h3>Login</h3>
 <input @bind="Email" placeholder="Email" />
@@ -27,6 +28,8 @@
         }
         var body = await res.Content.ReadFromJsonAsync<LoginRes>();
         await AuthState.SetTokenAsync(body?.token);
-        Result = "Logged in";
+
+        // Navigate to somewhere meaningful so you see the change right away
+        Nav.NavigateTo("/dashboard");
     }
 }
