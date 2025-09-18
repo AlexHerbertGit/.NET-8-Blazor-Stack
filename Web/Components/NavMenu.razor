@@ -1,0 +1,69 @@
+﻿@namespace Web.Components
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Routing
+@inject NavigationManager Nav
+@inject AuthenticationStateProvider AuthStateProvider
+
+<nav class="navbar navbar-expand-lg navbar-light bg-light border-bottom mb-3">
+    <div class="container-fluid">
+        <NavLink class="navbar-brand" href="/">Kobra Kai</NavLink>
+
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav"
+                aria-controls="mainNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="mainNav">
+            <!-- Global navigation -->
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item"><NavLink class="nav-link" href="/" Match="NavLinkMatch.All">Home</NavLink></li>
+                <li class="nav-item"><NavLink class="nav-link" href="/">Meals</NavLink></li>
+                <li class="nav-item"><NavLink class="nav-link" href="/about">About</NavLink></li>
+                <li class="nav-item"><NavLink class="nav-link" href="/contact">Contact</NavLink></li>
+            </ul>
+
+            <AuthorizeView>
+                <Authorized Context="outerAuth">
+                    <AuthorizeView Roles="member" Context="memberAuth">
+                        <ul class="navbar-nav">
+                            <li class="nav-item"><NavLink class="nav-link" href="/">Create Meal</NavLink></li>
+                            <li class="nav-item"><NavLink class="nav-link" href="/orders">Orders</NavLink></li>
+                        </ul>
+                    </AuthorizeView>
+
+                    <AuthorizeView Roles="beneficiary" Context="beneficiaryAuth">
+                        <ul class="navbar-nav">
+                            <li class="nav-item"><NavLink class="nav-link" href="/dashboard">My Tokens & Orders</NavLink></li>
+                        </ul>
+                    </AuthorizeView>
+
+                    <ul class="navbar-nav ms-2">
+                        <li class="nav-item"><NavLink class="nav-link" href="/dashboard">Dashboard</NavLink></li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" @onclick="Logout" @onclick:preventDefault="true">Logout</a>
+                        </li>
+                    </ul>
+                </Authorized>
+
+                <NotAuthorized Context="anon">
+                    <ul class="navbar-nav">
+                        <li class="nav-item"><NavLink class="nav-link" href="/login">Login</NavLink></li>
+                        <li class="nav-item"><NavLink class="nav-link" href="/register">Register</NavLink></li>
+                    </ul>
+                </NotAuthorized>
+            </AuthorizeView>
+        </div>
+    </div>
+</nav>
+
+@code {
+    private async Task Logout()
+    {
+        if (AuthStateProvider is Web.Auth.JwtAuthStateProvider jwt)
+        {
+            await jwt.SetTokenAsync(null);
+            Nav.NavigateTo("/"); // SPA navigate is fine; no need forceLoad
+        }
+    }
+}
+

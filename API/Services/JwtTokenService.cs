@@ -5,14 +5,14 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 
-namespace KobraKai.Api.Services;
+namespace KobraKai.API.Services;
 
 public class JwtTokenService
 {
     private readonly IConfiguration _cfg;
     public JwtTokenService(IConfiguration cfg) => _cfg = cfg;
 
-    public string Create(ApplicationUser user)
+    public string CreateToken(ApplicationUser user)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_cfg["Jwt:Key"]!));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);

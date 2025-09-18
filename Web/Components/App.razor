@@ -1,7 +1,8 @@
-﻿@namespace Web.Components
+﻿@rendermode InteractiveServer
+@namespace Web.Components
 @using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.AspNetCore.Components.Routing
-@rendermode InteractiveServer
+
 
 <CascadingAuthenticationState>
     <Router AppAssembly="@typeof(App).Assembly">
@@ -9,9 +10,12 @@
             <RouteView RouteData="routeData" DefaultLayout="typeof(Web.Components.MainLayout)" />
             <FocusOnNavigate RouteData="routeData" Selector="h1" />
         </Found>
+
         <NotFound>
-            <h1>Not found</h1>
-            <p>Sorry, there’s nothing at this address.</p>
+            <LayoutView Layout="typeof(Web.Components.MainLayout)">
+                <h1>Not found</h1>
+                <p>Sorry, there’s nothing at this address.</p>
+            </LayoutView>
         </NotFound>
     </Router>
 </CascadingAuthenticationState>

@@ -1,0 +1,163 @@
+﻿@page "/orders"
+@using Microsoft.AspNetCore.Authorization
+@inject Web.Services.ApiClient Api
+@inject NavigationManager Nav
+@attribute [Authorize(Roles = "member")]
+
+<h3>Pending Orders</h3>
+
+<div class="mb-3">
+    <button class="btn btn-outline-secondary btn-sm" @onclick="LoadPending">Refresh</button>
+</div>
+
+@if (loading)
+{
+    <p>Loading…</p>
+}
+else if (!string.IsNullOrEmpty(Error))
+{
+    <div class="alert alert-danger">@Error</div>
+}
+else if (Pending is null || Pending.Length == 0)
+{
+    <p>No pending orders.</p>
+}
+else
+{
+    <div class="mb-2"><b>Total pending:</b> @Pending.Length</div>
+
+    @foreach (var o in Pending)
+    {
+        <div class="border rounded p-3 mb-2">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div><b>Order:</b> @o.id</div>
+                    <div><b>Status:</b> @o.status</div>
+                    <div><b>Meal:</b> @o.mealTitle (@o.mealId)</div>
+                    <div><b>Qty:</b> @o.quantity</div>
+                    <div><b>Tokens:</b> @o.tokenCost</div>
+                    <div><b>Beneficiary:</b> @o.beneficiaryName (@o.beneficiaryId)</div>
+                    <div><small class="text-muted">@o.createdAt?.ToLocalTime()</small></div>
+                </div>
+                <div class="ms-3 d-flex gap-2">
+                    <button class="btn btn-success btn-sm" @onclick="() => Accept(o.id)">Accept</button>
+                </div>
+            </div>
+            @if (!string.IsNullOrEmpty(LastAction) && LastActionOrderId == o.id)
+            {
+                <pre class="mt-2">@LastAction</pre>
+            }
+        </div>
+    }
+}
+
+@code {
+    OrderDto[]? Pending;
+    bool loading = true;
+    string? Error;
+    string? LastAction;
+    Guid? LastActionOrderId;
+
+    class OrderDto
+    {
+        public Guid id { get; set; }
+        public string? status { get; set; }
+        public Guid? mealId { get; set; }
+        public string? mealTitle { get; set; }
+        public int quantity { get; set; }
+        public string? beneficiaryId { get; set; }
+        public string? beneficiaryName { get; set; }
+        public int tokenCost { get; set; }
+        public DateTime? createdAt { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync() => await LoadPending();
+
+    async Task LoadPending()
+    {
+        loading = true;
+        Error = null;
+        LastAction = null;
+        StateHasChanged();
+
+        try
+        {
+            // Try common pending endpoints; fall back if one isn't available
+            Pending = await Api.Authed.GetFromJsonAsync<OrderDto[]>("api/orders/pending");
+        }
+        catch (HttpRequestException)
+        {
+            try
+            {
+                Pending = await Api.Authed.GetFromJsonAsync<OrderDto[]>("api/orders?status=pending");
+            }
+            catch (Exception ex2)
+            {
+                Error = $"Failed to load pending orders: {ex2.Message}";
+            }
+        }
+        catch (Exception ex)
+        {
+            Error = $"Failed to load pending orders: {ex.Message}";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    async Task Accept(Guid orderId)
+    {
+        LastAction = null;
+        LastActionOrderId = orderId;
+
+        // Try a few common patterns so we work with your API either way
+        var tried = new List<(string method, string url, HttpResponseMessage? res, string? body)>();
+
+        async Task TryEndpoint(Func<Task<HttpResponseMessage>> call, string label)
+        {
+            try
+            {
+                var res = await call();
+                var body = await res.Content.ReadAsStringAsync();
+                tried.Add((label, "", res, body));
+                if (res.IsSuccessStatusCode)
+                {
+                    LastAction = $"{(int)res.StatusCode} {res.ReasonPhrase}\n{body}";
+                }
+            }
+            catch (Exception ex)
+            {
+                tried.Add((label, "", null, $"EXCEPTION: {ex.GetType().Name} - {ex.Message}"));
+            }
+        }
+
+        // 1) POST /api/orders/{id}/accept
+        if (LastAction is null)
+            await TryEndpoint(() => Api.Authed.PostAsync($"api/orders/{orderId}/accept", content: null!), "POST /api/orders/{id}/accept");
+
+        // 2) POST /api/orders/accept/{id}
+        if (LastAction is null)
+            await TryEndpoint(() => Api.Authed.PostAsync($"api/orders/accept/{orderId}", content: null!), "POST /api/orders/accept/{id}");
+
+        // 3) PUT status
+        if (LastAction is null)
+            await TryEndpoint(() => Api.Authed.PutAsJsonAsync($"api/orders/{orderId}/status", new { status = "accepted" }), "PUT /api/orders/{id}/status");
+
+        // 4) PATCH (if supported)
+        if (LastAction is null)
+            await TryEndpoint(() => Api.Authed.PatchAsJsonAsync($"api/orders/{orderId}", new { status = "accepted" }), "PATCH /api/orders/{id}");
+
+        // If still nothing worked, show the last attempt details
+        if (LastAction is null && tried.Count > 0)
+        {
+            var last = tried.Last();
+            LastAction = last.res is null
+                ? last.body
+                : $"{(int)last.res.StatusCode} {last.res.ReasonPhrase}\n{last.body}";
+        }
+
+        // Refresh list after an action
+        await LoadPending();
+    }
+}

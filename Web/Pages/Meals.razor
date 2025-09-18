@@ -1,18 +1,50 @@
 ﻿@page "/"
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Web
+@using System.Linq
 @inject Web.Services.ApiClient Api
+@inject Web.Services.CurrentUser CU
 
 <h3>Meals</h3>
 
 <AuthorizeView Roles="member">
-    <div>
+    <div class="mb-4">
         <h4>Create (member)</h4>
-        <input @bind="Title" placeholder="Title" />
-        <input @bind="Description" placeholder="Description" />
-        <input @bind="Tags" placeholder="dietary tags (comma separated)" />
-        <input type="number" @bind="Portions" />
-        <button @onclick="CreateMeal">Create</button>
-        <pre>@CreateResult</pre>
+
+        <div class="vstack gap-2" style="max-width: 520px">
+            <input class="form-control"
+                   placeholder="Title"
+                   value="@Title"
+                   @oninput="e => Title = e.Value?.ToString() ?? string.Empty" />
+
+            <input class="form-control"
+                   placeholder="Description"
+                   value="@Description"
+                   @oninput="e => Description = e.Value?.ToString() ?? string.Empty" />
+
+            <input class="form-control"
+                   placeholder="dietary tags (comma separated)"
+                   value="@Tags"
+                   @oninput="e => Tags = e.Value?.ToString() ?? string.Empty" />
+
+            <input class="form-control"
+                   type="number"
+                   inputmode="numeric"
+                   value="@PortionsString"
+                   @oninput="OnPortionsChanged" />
+
+            <div class="hstack gap-2">
+                <button class="btn btn-primary"
+                        disabled="@(!CU.IsLoaded || !CU.IsMember)"
+                        title="@(!CU.IsLoaded ? "Loading user…" : (!CU.IsMember ? "Only members can create meals" : null))"
+                        @onclick="CreateMeal">
+                    Create
+                </button>
+                <button class="btn btn-outline-secondary" @onclick="@(() => CreateResult = $"Ping {DateTime.Now:T}")">Ping</button>
+            </div>
+
+            <pre>@CreateResult</pre>
+        </div>
     </div>
 </AuthorizeView>
 
@@ -25,7 +57,7 @@ else
 {
     @foreach (var m in Meal)
     {
-        <div style="border:1px solid #eee;padding:8px;margin:6px 0">
+        <div class="border rounded p-2 my-2">
             <b>@m.title</b> — Portions: @m.portionsAvailable
             <div>Dietary: @string.Join(", ", m.dietaryTags ?? Array.Empty<string>())</div>
             <div><small>ID: @m.id</small></div>
@@ -35,27 +67,52 @@ else
 
 @code {
     MealDto[]? Meal;
-    string Title = "", Description = "", Tags = ""; int Portions = 0; string? CreateResult;
+
+    string Title = "", Description = "", Tags = "";
+    int Portions = 0;
+    string PortionsString { get => Portions.ToString(); set => _ = int.TryParse(value, out Portions); }
+    void OnPortionsChanged(ChangeEventArgs e) => PortionsString = e?.Value?.ToString() ?? "0";
+
+    string? CreateResult;
 
     class MealDto { public Guid id { get; set; } public string? title { get; set; } public string? description { get; set; } public string[]? dietaryTags { get; set; } public int portionsAvailable { get; set; } public string? providerId { get; set; } }
     class MealCreate { public string title { get; set; } = ""; public string? description { get; set; } public string[]? dietaryTags { get; set; } public int portionsAvailable { get; set; } }
 
     protected override async Task OnInitializedAsync()
-        => Meal = await Api.Public.GetFromJsonAsync<MealDto[]>("api/meals");
+    {
+        // Make CurrentUser available (tries /api/auth/me then falls back to claims)
+        await CU.EnsureLoadedAsync();
+
+        try { Meal = await Api.Public.GetFromJsonAsync<MealDto[]>("api/meals"); }
+        catch (Exception ex) { CreateResult = $"Load failed: {ex.Message}"; }
+    }
 
     async Task CreateMeal()
     {
-        var body = new MealCreate
+        try
         {
-            title = Title,
-            description = Description,
-            dietaryTags = string.IsNullOrWhiteSpace(Tags)
-                ? Array.Empty<string>()
-                : Tags.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToArray(),
-            portionsAvailable = Portions
-        };
-        var res = await Api.Authed.PostAsJsonAsync("api/meals", body);
-        CreateResult = $"{(int)res.StatusCode} {res.ReasonPhrase}";
-        Meal = await Api.Public.GetFromJsonAsync<MealDto[]>("api/meals");
+            if (!CU.IsMember) { CreateResult = "Only members can create meals."; return; }
+
+            var body = new MealCreate
+            {
+                title = Title,
+                description = Description,
+                dietaryTags = string.IsNullOrWhiteSpace(Tags)
+                    ? Array.Empty<string>()
+                    : Tags.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToArray(),
+                portionsAvailable = Portions
+            };
+
+            var res = await Api.Authed.PostAsJsonAsync("api/meals", body);
+            var text = await res.Content.ReadAsStringAsync();
+            CreateResult = $"{(int)res.StatusCode} {res.ReasonPhrase}\n{text}";
+
+            if (res.IsSuccessStatusCode)
+            {
+                Meal = await Api.Public.GetFromJsonAsync<MealDto[]>("api/meals");
+                Title = Description = Tags = ""; Portions = 0;
+            }
+        }
+        catch (Exception ex) { CreateResult = $"EXCEPTION: {ex.GetType().Name} - {ex.Message}"; }
     }
 }

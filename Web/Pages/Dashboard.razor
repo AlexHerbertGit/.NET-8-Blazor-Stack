@@ -1,10 +1,13 @@
 ﻿@page "/dashboard"
 @using Microsoft.AspNetCore.Authorization
-@attribute [Authorize]
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
 @inject Web.Services.ApiClient Api
 @inject NavigationManager Nav
+@inject AuthenticationStateProvider AuthStateProvider
+@attribute [Authorize]
 
-<h3>Dashboard (/auth/me)</h3>
+<h3>Dashboard</h3>
 
 @if (loading)
 {
@@ -16,29 +19,49 @@ else if (Me is null)
 }
 else
 {
-    <pre>@System.Text.Json.JsonSerializer.Serialize(Me, new System.Text.Json.JsonSerializerOptions { WriteIndented = true })</pre>
+    <pre>@System.Text.Json.JsonSerializer.Serialize(
+                    Me,
+                    new System.Text.Json.JsonSerializerOptions { WriteIndented = true })</pre>
 }
 
 @code {
     MeDto? Me;
     bool loading = true;
 
-    class MeDto { public string? id { get; set; } public string? email { get; set; } public string? role { get; set; } public int tokenBalance { get; set; } public string? name { get; set; } }
+    class MeDto
+    {
+        public string? id { get; set; }
+        public string? email { get; set; }
+        public string? role { get; set; }
+        public int tokenBalance { get; set; }
+        public string? name { get; set; }
+    }
 
     protected override async Task OnInitializedAsync()
     {
+        loading = true;
         try
         {
-            Me = await Api.GetAsync<MeDto>("api/auth/me");
+            var state = await AuthStateProvider.GetAuthenticationStateAsync();
+            var u = state.User;
+
+            if (u?.Identity?.IsAuthenticated != true)
+            {
+                Nav.NavigateTo("/login");
+                return;
+            }
+
+            Me = new MeDto
+            {
+                id = u.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? u.FindFirst("sub")?.Value,
+                email = u.FindFirst(ClaimTypes.Email)?.Value ?? u.FindFirst("email")?.Value,
+                role = u.FindFirst(ClaimTypes.Role)?.Value ?? u.FindFirst("role")?.Value,
+                name = u.Identity?.Name ?? u.FindFirst("name")?.Value,
+                tokenBalance = 0
+            };
+
+            // (No API calls here, so no 404 noise)
         }
-        catch
-        {
-            // if your ApiClient throws on 401/JSON errors, you can redirect here
-            Nav.NavigateTo("api/login");
-        }
-        finally
-        {
-            loading = false;
-        }
+        finally { loading = false; }
     }
 }

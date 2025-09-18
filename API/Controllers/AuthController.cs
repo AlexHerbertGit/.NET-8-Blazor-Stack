@@ -1,66 +1,97 @@
-﻿using KobraKai.Api.Services;
-using KobraKai.API.Data;
-using KobraKai.API.Dtos;
-using KobraKai.API.Models;
+﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using KobraKai.API.Models;            // ApplicationUser
+using KobraKai.API.Dtos;                   // your DTO namespaces if needed (RegisterRequest, LoginRequest, MeResponse)
+using KobraKai.API.Services;
 
-namespace KobraKai.Api.Controllers;
-
-[ApiController]
-[Route("api/[controller]")]
-public class AuthController : ControllerBase
+namespace KobraKai.API.Controllers
 {
-    private readonly UserManager<ApplicationUser> _users;
-    private readonly SignInManager<ApplicationUser> _signin;
-    private readonly JwtTokenService _jwt;
-    private readonly AppDbContext _db;
-
-    public AuthController(UserManager<ApplicationUser> users, SignInManager<ApplicationUser> signin, JwtTokenService jwt, AppDbContext db)
+    [ApiController]
+    [Route("api/auth")] // explicit to avoid any controller-name coupling
+    public class AuthController : ControllerBase
     {
-        _users = users; _signin = signin; _jwt = jwt; _db = db;
-    }
+        private readonly UserManager<ApplicationUser> _users;
+        private readonly RoleManager<IdentityRole> _roles;
+        private readonly JwtTokenService _tokens;
 
-    [HttpPost("register")]
-    public async Task<IActionResult> Register([FromBody] RegisterRequest req)
-    {
-        if (req.Role != "beneficiary" && req.Role != "member")
-            return BadRequest(new { error = "Invalid role" });
-
-        var user = new ApplicationUser
+        public AuthController(UserManager<ApplicationUser> users,
+                              RoleManager<IdentityRole> roles,
+                              JwtTokenService tokens)
         {
-            UserName = req.Email,
-            Email = req.Email,
-            Role = req.Role,
-            TokenBalance = req.Role == "beneficiary" ? 10 : 0
-        };
-        var result = await _users.CreateAsync(user, req.Password);
-        if (!result.Succeeded) return BadRequest(new { error = string.Join("; ", result.Errors.Select(e => e.Description)) });
+            _users = users;
+            _roles = roles;
+            _tokens = tokens;
+        }
 
-        // Optionally add IdentityRole & role assignment here if you want formal roles
-        return Ok(new { ok = true, id = user.Id });
-    }
+        // POST: /api/auth/register
+        [HttpPost("register")]
+        [AllowAnonymous]
+        public async Task<IActionResult> Register([FromBody] RegisterRequest req)
+        {
+            if (req is null) return BadRequest(new { error = "Missing body" });
 
-    [HttpPost("login")]
-    public async Task<IActionResult> Login([FromBody] LoginRequest req)
-    {
-        var user = await _users.FindByEmailAsync(req.Email);
-        if (user == null) return Unauthorized(new { error = "Invalid credentials" });
+            var role = (req.Role ?? "").Trim().ToLowerInvariant();
+            if (role != "beneficiary" && role != "member")
+                return BadRequest(new { error = "Invalid role. Use 'beneficiary' or 'member'." });
 
-        var pwOk = await _users.CheckPasswordAsync(user, req.Password);
-        if (!pwOk) return Unauthorized(new { error = "Invalid credentials" });
+            var user = new ApplicationUser
+            {
+                UserName = req.Email,
+                Email = req.Email,
+                Role = role,
+                TokenBalance = role == "beneficiary" ? 10 : 0
+            };
 
-        var token = _jwt.Create(user);
-        return Ok(new { token });
-    }
+            var created = await _users.CreateAsync(user, req.Password);
+            if (!created.Succeeded)
+                return BadRequest(new { error = string.Join("; ", created.Errors.Select(e => e.Description)) });
 
-    [Authorize]
-    [HttpGet("me")]
-    public async Task<ActionResult<MeResponse>> Me()
-    {
-        var user = await _users.GetUserAsync(User);
-        if (user == null) return Unauthorized();
-        return new MeResponse(user.Id, user.Email!, user.Role, user.TokenBalance, user.UserName);
+            // Ensure Identity role exists & assign (keeps DB roles consistent with JWT claim)
+            if (!await _roles.RoleExistsAsync(role))
+            {
+                var rc = await _roles.CreateAsync(new IdentityRole(role));
+                if (!rc.Succeeded)
+                    return BadRequest(new { error = "Failed creating role: " + string.Join("; ", rc.Errors.Select(e => e.Description)) });
+            }
+
+            var addToRole = await _users.AddToRoleAsync(user, role);
+            if (!addToRole.Succeeded)
+                return BadRequest(new { error = "User created, but failed to add to role: " + string.Join("; ", addToRole.Errors.Select(e => e.Description)) });
+
+            return Created($"/api/auth/users/{user.Id}", new { ok = true, id = user.Id, role });
+        }
+
+        // POST: /api/auth/login
+        [HttpPost("login")]
+        [AllowAnonymous]
+        public async Task<IActionResult> Login([FromBody] LoginRequest req)
+        {
+            if (req is null) return BadRequest(new { error = "Missing body" });
+            var user = await _users.FindByEmailAsync(req.Email);
+            if (user is null) return Unauthorized();
+
+            var ok = await _users.CheckPasswordAsync(user, req.Password);
+            if (!ok) return Unauthorized();
+
+            var token = _tokens.CreateToken(user); // already adds role/email/sub claims
+            return Ok(new { token });
+        }
+
+        // GET: /api/auth/me
+        [HttpGet("me")]
+        [Authorize]
+        public async Task<ActionResult<MeResponse>> Me()
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirst("sub")?.Value;
+            if (string.IsNullOrEmpty(userId)) return Unauthorized();
+
+            var user = await _users.FindByIdAsync(userId);
+            if (user is null) return NotFound();
+
+            // Use the positional-record constructor
+            return new MeResponse(user.Id, user.Email ?? "", user.Role, user.TokenBalance, user.UserName);
+        }
     }
 }

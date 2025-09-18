@@ -1,18 +1,33 @@
 ﻿@page "/login"
+@using Microsoft.AspNetCore.Components.Web
 @inject Web.Services.ApiClient Api
 @inject Web.Auth.JwtAuthStateProvider AuthState
 @inject NavigationManager Nav
 
 <h3>Login</h3>
-<input @bind="Email" placeholder="Email" />
-<input @bind="Password" type="password" placeholder="Password" />
-<button @onclick="LoginUser">Login</button>
 
-<pre>@Result</pre>
+<div class="vstack gap-2" style="max-width: 420px">
+    <input class="form-control"
+           placeholder="Email"
+           value="@Email"
+           @oninput="e => Email = e.Value?.ToString() ?? string.Empty" />
+
+    <input class="form-control"
+           type="password"
+           placeholder="Password"
+           value="@Password"
+           @oninput="e => Password = e.Value?.ToString() ?? string.Empty" />
+
+    <div class="hstack gap-2">
+        <button class="btn btn-primary" @onclick="LoginUser">Login</button>
+        <button class="btn btn-outline-secondary" @onclick="@(() => Result = $"Ping {DateTime.Now:T}")">Ping</button>
+    </div>
+
+    <pre class="mt-2">@Result</pre>
+</div>
 
 @code {
-    string Email = "";
-    string Password = "";
+    string Email = "", Password = "";
     string? Result;
 
     class LoginReq { public string Email { get; set; } = ""; public string Password { get; set; } = ""; }
@@ -20,16 +35,25 @@
 
     async Task LoginUser()
     {
-        var res = await Api.Public.PostAsJsonAsync("api/auth/login", new LoginReq { Email = Email, Password = Password });
-        if (!res.IsSuccessStatusCode)
+        try
         {
-            Result = await res.Content.ReadAsStringAsync();
-            return;
-        }
-        var body = await res.Content.ReadFromJsonAsync<LoginRes>();
-        await AuthState.SetTokenAsync(body?.token);
+            var res = await Api.Public.PostAsJsonAsync("api/auth/login", new LoginReq { Email = Email, Password = Password });
+            var bodyText = await res.Content.ReadAsStringAsync();
 
-        // Navigate to somewhere meaningful so you see the change right away
-        Nav.NavigateTo("/dashboard");
+            if (!res.IsSuccessStatusCode)
+            {
+                Result = $"{(int)res.StatusCode} {res.ReasonPhrase}\n{bodyText}";
+                return;
+            }
+
+            var body = System.Text.Json.JsonSerializer.Deserialize<LoginRes>(bodyText);
+            await AuthState.SetTokenAsync(body?.token);
+
+            Nav.NavigateTo("/dashboard");
+        }
+        catch (Exception ex)
+        {
+            Result = $"EXCEPTION: {ex.GetType().Name} - {ex.Message}";
+        }
     }
 }

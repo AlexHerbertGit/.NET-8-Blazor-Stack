@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 
-namespace KobraKai.Api.Controllers;
+namespace KobraKai.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
