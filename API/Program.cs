@@ -10,6 +10,8 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
 
+
+
 var builder = WebApplication.CreateBuilder(args);
 
 // EF + Identity
@@ -43,7 +45,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
          ValidateAudience = true,
          ValidIssuer = jwtIssuer,
          ValidAudience = jwtAudience,
-         ValidateLifetime = true
+         ValidateLifetime = true,
+         RoleClaimType = System.Security.Claims.ClaimTypes.Role,
+         NameClaimType = System.Security.Claims.ClaimTypes.NameIdentifier
      };
  });
 
@@ -55,17 +59,26 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
-    var jwt = new OpenApiSecurityScheme
+    var scheme = new OpenApiSecurityScheme
     {
         Name = "Authorization",
         In = ParameterLocation.Header,
         Type = SecuritySchemeType.Http,
         Scheme = "bearer",
         BearerFormat = "JWT",
-        Description = "Bearer {your JWT}"
+        Description = "Enter: Bearer {your JWT}",
+        Reference = new OpenApiReference
+        {
+            Type = ReferenceType.SecurityScheme,
+            Id = "Bearer"
+        }
     };
-    c.AddSecurityDefinition("Bearer", jwt);
-    c.AddSecurityRequirement(new OpenApiSecurityRequirement { { jwt, Array.Empty<string>() } });
+
+    c.AddSecurityDefinition("Bearer", scheme);
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        { scheme, Array.Empty<string>() }
+    });
 });
 
 // CORS (add your web origins here as needed)
@@ -80,6 +93,22 @@ builder.Services.AddCors(p => p.AddPolicy("Dev", policy =>
 
 var app = builder.Build();
 
+Console.WriteLine("[API] Booting…");
+
+var dataSource = app.Services.GetRequiredService<EndpointDataSource>();
+app.Lifetime.ApplicationStarted.Register(() =>
+{
+    Console.WriteLine("=== API Mapped Endpoints ===");
+    foreach (var ep in dataSource.Endpoints.OfType<RouteEndpoint>())
+    {
+        var pattern = ep.RoutePattern.RawText;
+        var methods = ep.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods;
+        var verbs = methods is { Count: > 0 } ? string.Join(",", methods) : "ANY";
+        Console.WriteLine($"{verbs,-10} {pattern}");
+    }
+    Console.WriteLine("============================");
+});
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -93,5 +122,5 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
-
+app.MapPost("/__ping", () => Results.Ok("pong (API)"));
 app.Run();

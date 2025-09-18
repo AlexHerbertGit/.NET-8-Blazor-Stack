@@ -5,6 +5,18 @@
     "version": "1.0"
   },
   "paths": {
+    "/__ping": {
+      "post": {
+        "tags": [
+          "API"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/api/auth/register": {
       "post": {
         "tags": [
@@ -524,13 +536,15 @@
     "securitySchemes": {
       "Bearer": {
         "type": "http",
-        "description": "Bearer {your JWT}",
+        "description": "Enter: Bearer {your JWT}",
         "scheme": "bearer",
         "bearerFormat": "JWT"
       }
     }
   },
   "security": [
-    { }
+    {
+      "Bearer": [ ]
+    }
   ]
 }
